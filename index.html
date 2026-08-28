@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+     <link rel="manifest" href="manifest.json">
+   <meta name="theme-color" content="#b4ff39">
 <title>Private Gate 🔐</title>
 <script src="https://unpkg.com/peerjs@1.5.3/dist/peerjs.min.js"></script>
 <style>
@@ -101,5 +103,6 @@ enterBtn.onclick=async()=>{const name=nameEl.value.trim(), secret=secretEl.value
 sendForm.onsubmit=async(e)=>{e.preventDefault();const t=textEl.value.trim();if(!t||!conn||!conn.open) return;const payload=await encrypt(t);payload.senderName=myName;try{conn.send(payload);addMsg(t, "me", myName);textEl.value="";}catch{addMsg("فشل الإرسال", "system");}};
 logoutBtn.onclick=()=>{try{conn?.close();peer?.destroy();}catch{}location.reload();};
 </script>
+  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js')}</script>
 </body>
 </html>
