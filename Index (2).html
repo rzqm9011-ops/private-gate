@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Private Gate 🔐</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#17212b">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://unpkg.com/peerjs@1.5.3/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui}
+body{min-height:100vh;display:grid;place-items:center;background:#0e1621;color:#fff;overflow:hidden;padding:0}
+.bg-glow{display:none}
+
+/* Login Card - Telegram style */
+.card{width:100%;max-width:380px;background:#17212b;border-radius:18px;padding:32px 24px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.4);animation:fadeIn .4s ease;margin:20px}
+.logo{width:68px;height:68px;margin:0 auto 14px;display:grid;place-items:center;font-size:30px;background:#2b5278;border-radius:50%}
+h1{font-size:20px;font-weight:700;letter-spacing:-0.3px}
+.card p{color:#aab8c2;font-size:13px;margin:8px 0 20px;line-height:1.5}
+input{width:100%;height:48px;background:#242f3d;border:0;border-radius:12px;padding:0 14px;color:#fff;font-size:16px;outline:none;transition:.2s;margin-bottom:12px}
+input:focus{background:#2b5278}
+input::placeholder{color:#6d7f8f}
+.secret-wrap{position:relative}
+#toggleSecret{position:absolute;left:8px;top:6px;height:36px;width:36px;border-radius:8px;border:0;background:transparent;color:#6d7f8f;cursor:pointer;font-size:16px}
+#enter{width:100%;height:50px;border-radius:12px;border:0;background:#2b88d8;color:#fff;font-weight:600;font-size:16px;cursor:pointer;transition:.2s;margin-top:4px}
+#enter:hover{background:#3ca0f0}
+#enter:disabled{opacity:.5}
+small{display:block;margin-top:14px;color:#6d7f8f;font-size:11px;line-height:1.5}
+#error{margin-top:12px;font-size:12px;color:#ff5a5a;min-height:16px}
+.hidden{display:none!important}
+
+/* Telegram iPhone Chat */
+.chat{width:100%;max-width:430px;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:#0e1621;position:relative}
+.chat.hidden{display:none!important}
+@media(min-width:500px){.chat{height:min(90vh,820px);border-radius:12px;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:20px;overflow:hidden;border:1px solid #1e2c3a}}
+
+/* Header - Telegram iOS */
+header{display:flex;justify-content:space-between;align-items:center;padding:0 12px;height:56px;background:#17212b;border-bottom:1px solid #232e3c;flex-shrink:0}
+header>div{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+header .avatar{width:40px;height:40px;border-radius:50%;background:#2b5278;display:grid;place-items:center;font-size:18px;flex-shrink:0}
+header strong{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.header-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+#status{font-size:12px;color:#aab8c2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:transparent!important;padding:0!important;border-radius:0!important}
+#status.online{color:#7aca62}
+#room{font-size:10px;color:#5a6d7e;display:none}
+.ghost{height:32px;padding:0 12px;border-radius:16px;border:0;background:#242f3d;color:#aab8c2;cursor:pointer;font-size:13px}
+
+/* Messages Area - Telegram wallpaper */
+#messages{flex:1;overflow:auto;padding:12px 10px;display:flex;flex-direction:column;gap:2px;background:#0e1621;background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0);background-size:24px 24px;scroll-behavior:smooth}
+#messages::-webkit-scrollbar{width:4px}
+#messages::-webkit-scrollbar-thumb{background:#2b5278;border-radius:10px}
+
+/* Bubbles - Telegram iOS */
+.msg{max-width:78%;padding:6px 10px 18px 10px;border-radius:18px;font-size:15px;line-height:1.35;word-break:break-word;position:relative;animation:msgPop .25s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 1px 2px rgba(0,0,0,0.2)}
+.msg.me{align-self:flex-end;background:#2b5278;color:#fff;border-bottom-right-radius:5px}
+.msg.other{align-self:flex-start;background:#182533;color:#fff;border-bottom-left-radius:5px}
+.msg.system{align-self:center;background:rgba(0,0,0,0.35);font-size:12px;color:#aab8c2;border-radius:14px;padding:5px 12px;margin:6px 0;box-shadow:none;backdrop-filter:blur(4px)}
+
+.meta{display:flex;gap:6px;align-items:center;margin-bottom:3px;font-size:12px;font-weight:600;opacity:.9}
+.msg.me .meta{color:#7bc4ff}
+.msg.other .meta{color:#5cc1ff}
+.msg .time{position:absolute;bottom:4px;right:10px;font-size:11px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:3px}
+.msg.me .time{color:rgba(255,255,255,0.6)}
+.msg.other .time{color:#6d7f8f}
+.msg .time::after{content:'✓✓';font-size:11px;letter-spacing:-2px;margin-left:2px}
+.msg.me .time::after{color:#6ab8ff}
+.msg.other .time::after{display:none}
+
+.msg-text{white-space:pre-wrap}
+
+#sendForm{display:flex;align-items:flex-end;gap:8px;padding:8px 8px 10px 8px;background:#17212b;border-top:1px solid #232e3c;flex-shrink:0}
+#sendForm .input-wrap{flex:1;background:#242f3d;border-radius:22px;display:flex;align-items:flex-end;padding:6px 6px 6px 14px;min-height:44px}
+#sendForm input{flex:1;margin:0;background:transparent;border:0;height:32px;padding:0;font-size:16px;outline:none;resize:none;max-height:120px}
+#sendForm button{width:38px;height:38px;min-width:38px;border-radius:50%;border:0;background:#2b88d8;color:#fff;cursor:pointer;display:grid;place-items:center;font-size:16px;transition:.2s;flex-shrink:0}
+#sendForm button:hover{background:#3ca0f0}
+#sendForm button:active{transform:scale(0.92)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes msgPop{from{opacity:0;transform:translateY(8px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="card" id="login">
+  <div class="logo">🔐</div>
+  <h1>Private Gate</h1>
+  <p>بوابة محادثة مشفرة - أي حد معاه نفس كلمة السر يقدر يدخل (2-10 أشخاص)</p>
+  <input id="name" maxlength="40" placeholder="اسمك" autocomplete="name">
+  <div class="secret-wrap">
+    <input id="secret" type="password" placeholder="كلمة السر المشتركة">
+    <button id="toggleSecret" type="button">👁️</button>
+  </div>
+  <button id="enter">دخول آمن</button>
+  <small>استخدم نفس كلمة السر على الجهازين. لا ترسلها داخل المحادثة.</small>
+  <div id="error"></div>
+</div>
+
+<div class="chat hidden" id="chat">
+  <header>
+    <div>
+      <div class="avatar">🔐</div>
+      <div class="header-info">
+        <strong>Private Gate</strong>
+        <span id="status">غير متصل</span>
+        <span id="room"></span>
+      </div>
+    </div>
+    <button id="logout" class="ghost">خروج</button>
+  </header>
+  <main id="messages"></main>
+  <form id="sendForm">
+    <div class="input-wrap">
+      <input id="text" autocomplete="off" placeholder="اكتب رسالة..." maxlength="4000">
+    </div>
+    <button type="submit">➤</button>
+  </form>
+</div>
+
+<script>
+const SALT = "private-gate-salt-v1";
+const $ = s => document.querySelector(s);
+const loginEl = $("#login"), chatEl = $("#chat"), nameEl = $("#name"), secretEl = $("#secret");
+const enterBtn = $("#enter"), statusEl = $("#status"), roomEl = $("#room"), messagesEl = $("#messages");
+const textEl = $("#text"), sendForm = $("#sendForm"), errorEl = $("#error"), logoutBtn = $("#logout");
+let peer=null, aesKey=null, myName="", roomId="";
+let conns=[]; // كل الاتصالات المفتوحة
+let members=new Map(); // id -> name
+let isHost=false;
+
+function b64(buf){return btoa(String.fromCharCode(...new Uint8Array(buf)))}
+function ab(b64s){const bin=atob(b64s);const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}
+async function shaRoom(secret){const h=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));return "pg-"+Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,20);}
+async function deriveKey(secret){const mat=await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"]);return crypto.subtle.deriveKey({name:"PBKDF2", salt:new TextEncoder().encode(SALT), iterations:100000, hash:"SHA-256"}, mat, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);}
+async function encrypt(txt){const iv=crypto.getRandomValues(new Uint8Array(12));const c=await crypto.subtle.encrypt({name:"AES-GCM", iv}, aesKey, new TextEncoder().encode(txt));return {iv:b64(iv), data:b64(c)};}
+async function decrypt(p){const pt=await crypto.subtle.decrypt({name:"AES-GCM", iv:ab(p.iv)}, aesKey, ab(p.data));return new TextDecoder().decode(pt);}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function addMsg(text, who="other", name=""){
+  const div=document.createElement("div");
+  div.className=`msg ${who}`;
+  const time=new Date().toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"});
+  if(who!=="system"){
+    const displayName = esc(name||(who==="me"?myName:"الطرف الآخر"));
+    div.innerHTML=`
+      <div class="meta">${displayName}</div>
+      <div class="msg-text">${esc(text)}</div>
+      <div class="time">${time}</div>
+    `;
+  }else{
+    div.textContent=text;
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop=messagesEl.scrollHeight;
+}
+function setStatus(t, online=false){statusEl.textContent=t;statusEl.className=online?"online":"";}
+let reconnectTimer=null;
+function stopReconnect(){ if(reconnectTimer){clearInterval(reconnectTimer); reconnectTimer=null; } }
+function updateCount(){
+  const total = conns.filter(c=>c.open).length + 1;
+  if(total>1) setStatus(`${total} متصلين • مشفر 🔒`, true);
+}
+
+function broadcast(data, exceptConn=null){
+  conns.forEach(c=>{
+    if(c!==exceptConn && c.open){
+      try{ c.send(data); }catch{}
+    }
+  });
+}
+
+function setupConn(c){
+  conns.push(c);
+  c.on("open", ()=>{
+    stopReconnect();
+    updateCount();
+    if(conns.filter(x=>x.open).length===1){
+      setStatus("متصل • مشفر 🔒", true);
+      addMsg(`تم ربط القناة المشفرة P2P`, "system");
+    }
+    try{c.send({type:"hello", name:myName});}catch{}
+    // لو أنت الهوست، ابعت للجديد لستة الأعضاء
+    if(isHost){
+      const list = Array.from(members.entries()).map(([id,name])=>({id,name}));
+      list.push({id:peer.id, name:myName});
+      try{ c.send({type:"members", list}); }catch{}
+    }
+  });
+  c.on("data", async d=>{
+    if(d?.type==="hello"){
+      members.set(c.peer, d.name);
+      addMsg(`انضم ${d.name}`, "system");
+      updateCount();
+      // الهوست ينشر خبر الانضمام للكل
+      if(isHost) broadcast({type:"hello", name:d.name}, c);
+      return;
+    }
+    if(d?.type==="members" && d.list){
+      d.list.forEach(m=>{ if(m.id!==peer?.id) members.set(m.id, m.name); });
+      return;
+    }
+    if(d?.type==="bye"){
+      members.delete(c.peer);
+      addMsg(`${d.name} خرج`, "system");
+      updateCount();
+      if(isHost) broadcast(d, c);
+      return;
+    }
+    if(!d?.iv) return;
+    try{
+      const plain=await decrypt(d);
+      addMsg(plain, "other", d.senderName||members.get(c.peer)||"");
+      // الهوست يعمل relay لكل الناس
+      if(isHost) broadcast(d, c);
+    }
+    catch{addMsg("رسالة غير قابلة للفك - كلمة السر مختلفة؟", "system");}
+  });
+  c.on("close", ()=>{
+    conns = conns.filter(x=>x!==c);
+    const name = members.get(c.peer);
+    if(name) addMsg(`${name} انقطع`, "system");
+    members.delete(c.peer);
+    updateCount();
+    if(conns.length===0){
+      setStatus("في انتظار باقي الأطراف...");
+      tryHostAgain();
+    }
+  });
+  c.on("error", ()=>{});
+}
+
+async function connectAsHost(room){
+  return new Promise((res)=>{
+    const p=new Peer(room);
+    peer=p;
+    p.on("open", ()=>{
+      isHost=true;
+      setStatus("في انتظار باقي الأطراف..."); 
+      roomEl.textContent=room;
+      addMsg(`أنت دخلت كـ ${myName} - أي حد معاه نفس الباسورد يقدر يدخل دلوقتي`, "system");
+      addMsg(`رابط الغرفة: ${room}`, "system");
+      res({role:"host"});
+    });
+    p.on("connection", c=>{ setupConn(c); });
+    p.on("error", e=>{
+      if(e.type==="unavailable-id"){
+        p.destroy();
+        isHost=false;
+        connectAsClient(room);
+        res({role:"client-try"});
+      }else{
+        setStatus("في انتظار باقي الأطراف...");
+        res({role:"host-wait"});
+      }
+    });
+  });
+}
+
+async function connectAsClient(room){
+  const p=new Peer();
+  peer=p;
+  isHost=false;
+  p.on("open", ()=>{
+    const c=p.connect(room,{reliable:true});
+    setupConn(c);
+    stopReconnect();
+    reconnectTimer=setInterval(()=>{
+      const openCount = conns.filter(x=>x.open).length;
+      if(openCount>0) return;
+      try{
+        const nc=p.connect(room,{reliable:true});
+        setupConn(nc);
+      }catch{}
+    },3000);
+  });
+  p.on("error", (e)=>{
+    setStatus("في انتظار باقي الأطراف...");
+  });
+}
+
+function tryHostAgain(){
+  if(isHost) return; // الهوست ميفضلش يحاول
+  if(peer){ try{peer.destroy();}catch{} }
+  conns=[];
+  setTimeout(()=>connectAsHost(roomId),1500);
+}
+
+$("#toggleSecret").onclick=()=>{ secretEl.type=secretEl.type==="password"?"text":"password"; };
+
+enterBtn.onclick=async()=>{
+  const name=nameEl.value.trim(), secret=secretEl.value.trim();
+  if(name.length<2){ errorEl.textContent="الاسم قصير جداً"; return; }
+  if(secret.length<4){ errorEl.textContent="كلمة السر 4 أحرف على الأقل"; return; }
+  enterBtn.disabled=true; enterBtn.textContent="جاري التشفير...";
+  errorEl.textContent="";
+  try{
+    myName=name;
+    aesKey=await deriveKey(secret);
+    roomId=await shaRoom(secret);
+    // خلاص ادخل جوة وافضل جوة مهما حصل
+    loginEl.classList.add("hidden");
+    chatEl.classList.remove("hidden");
+    setStatus("جاري إنشاء الغرفة...");
+    roomEl.textContent=roomId;
+    await connectAsHost(roomId);
+  }catch(e){
+    console.error(e);
+    // حتى لو حصل ايرور، خليك جوة الصفحة
+    loginEl.classList.add("hidden");
+    chatEl.classList.remove("hidden");
+    setStatus("في انتظار الطرف الآخر...");
+    errorEl.textContent="";
+    addMsg("حصل خطأ بسيط، بس انت لسه جوة - بنحاول نربط تاني...", "system");
+    tryHostAgain();
+  }finally{
+    enterBtn.disabled=false;enterBtn.textContent="دخول آمن";
+  }
+};
+
+sendForm.onsubmit=async(e)=>{
+  e.preventDefault();
+  const t=textEl.value.trim();
+  if(!t) return;
+  const openConns = conns.filter(c=>c.open);
+  if(openConns.length===0){
+    addMsg("مفيش حد تاني لسه - رسالتك هتظهر عندك بس", "system");
+    addMsg(t, "me", myName);
+    textEl.value="";
+    return;
+  }
+  const payload=await encrypt(t);
+  payload.senderName=myName;
+  try{
+    openConns.forEach(c=>{ try{c.send(payload);}catch{} });
+    addMsg(t, "me", myName);
+    textEl.value="";
+  }
+  catch{addMsg("فشل الإرسال - هنحاول تاني", "system");}
+};
+logoutBtn.onclick=()=>{
+  stopReconnect();
+  try{
+    broadcast({type:"bye", name:myName});
+    conns.forEach(c=>{ try{c.close();}catch{} });
+    peer?.destroy();
+  }catch{}
+  location.reload();
+};
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
+</script>
+</body>
+</html>
