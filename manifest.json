@@ -1,0 +1,10 @@
+{
+  "name":"Private Gate",
+  "short_name":"Private Gate",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#0e1621",
+  "theme_color":"#17212b",
+  "lang":"ar",
+  "dir":"rtl"
+}
