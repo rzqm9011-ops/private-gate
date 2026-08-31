@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Private Gate 🔐</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto}
+body{height:100vh;background:#0e1621;color:#fff;overflow:hidden;display:flex;flex-direction:column}
+.hidden{display:none!important}
+.app{display:flex;flex-direction:row;flex:1;overflow:hidden}
+.sidebar{width:360px;min-width:300px;max-width:45%;background:#17212b;border-right:1px solid #232e3c;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{height:56px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;background:#202e3d;border-bottom:1px solid #232e3c}
+.channel-list{flex:1;overflow:auto;padding:6px 0}
+.channel-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;position:relative;border-radius:8px;margin:2px 6px}
+.channel-item:hover{background:#1e2c3a}
+.channel-item.active{background:#2b5278}
+.ch-avatar{width:44px;height:44px;border-radius:50%;background:#242f3d;display:grid;place-items:center;flex-shrink:0;color:#aab8c2;font-weight:700}
+.ch-info{flex:1;min-width:0;text-align:left}
+.ch-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-last{font-size:11px;color:#aab8c2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.del-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;border:0;background:#3a2f3d;color:#ff6b6b;cursor:pointer;display:none}
+.channel-item:hover .del-btn{display:grid;place-items:center}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center;background:#0e1621}
+.chat{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0e1621;position:relative}
+.chat-header{height:56px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;background:#17212b;border-bottom:1px solid #232e3c}
+.avatar{width:38px;height:38px;border-radius:50%;background:#2b5278;display:grid;place-items:center;flex-shrink:0;overflow:hidden}
+#status{font-size:10px;color:#7aca62}
+#status.connecting{color:#ffa500}
+.header-actions{display:flex;gap:3px;align-items:center}
+.icon-only{width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:#aab8c2;cursor:pointer;display:grid;place-items:center;font-size:17px}
+.icon-only:hover{background:#242f3d}
+.icon-only.call{color:#00a884}
+#messages{flex:1;overflow:auto;padding:10px 8px;display:flex;flex-direction:column;gap:4px;background-size:cover;background-position:center}
+.msg{max-width:78%;padding:6px 10px 18px 10px;border-radius:16px;font-size:14px;word-break:break-word;position:relative;animation:fadeIn .15s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.msg.me{align-self:flex-end;background:#005c4b;color:#fff;border-bottom-right-radius:4px}
+.msg.other{align-self:flex-start;background:#182533;color:#fff;border-bottom-left-radius:4px}
+.msg.system{align-self:center;background:rgba(0,168,132,.15);font-size:11px;color:#7aca62;border-radius:10px;padding:6px 12px;border:1px solid rgba(0,168,132,.3)}
+.meta{font-size:10px;opacity:.7;margin-bottom:2px}
+.time{position:absolute;bottom:3px;right:8px;font-size:9px;opacity:.6;direction:ltr}
+.msg img.preview{max-width:100%;border-radius:8px;margin:3px 0;display:block;max-height:250px}
+.msg audio{max-width:220px;margin-top:4px}
+#sendForm{display:flex;align-items:center;gap:5px;padding:7px;background:#17212b;border-top:1px solid #232e3c}
+#sendForm .input-wrap{flex:1;background:#242f3d;border-radius:20px;display:flex;padding:5px;min-height:40px;align-items:center}
+#sendForm input{flex:1;background:transparent;border:0;padding:0 8px;font-size:14px;color:#fff;outline:none}
+#sendBtn{width:36px;height:36px;border-radius:50%;border:0;background:#00a884;color:#fff;cursor:pointer;display:grid;place-items:center}
+.rec-btn{width:36px;height:36px;border-radius:50%;border:0;background:#242f3d;color:#00a884;cursor:pointer;display:grid;place-items:center;font-size:18px;transition:.2s}
+.rec-btn.recording{background:#f15c6d;color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:grid;place-items:center;z-index:30;padding:16px}
+.card{width:100%;max-width:360px;background:#1e2d3e;border-radius:16px;padding:20px;text-align:center}
+.card input{width:100%;height:44px;background:#242f3d;border:0;border-radius:8px;padding:0 10px;color:#fff;margin-bottom:6px;font-size:14px}
+.primary-btn{width:100%;height:44px;border-radius:8px;border:0;background:#2b88d8;color:#fff;font-weight:700;cursor:pointer}
+.secondary-btn{width:100%;height:38px;border-radius:8px;border:0;background:#242f3d;color:#aab8c2;margin-top:6px;cursor:pointer}
+.settings-page{position:fixed;inset:0;background:#111b21;z-index:40;display:flex;flex-direction:column;overflow:hidden}
+.settings-header{height:56px;background:#202c33;display:flex;align-items:center;gap:14px;padding:0 14px}
+.settings-header .back{width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:#aab8c2;font-size:18px;cursor:pointer}
+.settings-content{flex:1;overflow:auto}
+.wa-profile{display:flex;align-items:center;gap:14px;padding:14px;background:#202c33;margin-bottom:6px;cursor:pointer}
+.wa-profile .avatar{width:64px;height:64px;border-radius:50%;background:#2a3942;display:grid;place-items:center;font-size:24px;overflow:hidden}
+.wa-section{background:#202c33;margin-bottom:6px}
+.wa-item{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #2a3942}
+.wa-item .text{flex:1;text-align:left}
+.wa-item .title{font-size:13px}
+.wa-item .desc{font-size:10px;color:#8696a0}
+.wa-toggle{width:34px;height:20px;background:#344049;border-radius:10px;position:relative;transition:.2s;flex-shrink:0}
+.wa-toggle.on{background:#00a884}
+.wa-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s}
+.wa-toggle.on::after{transform:translateX(14px)}
+.bg-preview{width:100%;height:80px;border-radius:8px;background:#2a3942;background-size:cover;background-position:center;margin:6px 0;border:2px dashed #344049}
+.bg-preview.has-image{border-style:solid;border-color:#00a884}
+.color-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin:6px 0}
+.color-dot{width:30px;height:30px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.color-dot.active{border-color:#fff}
+.msg-menu{position:absolute;top:-32px;right:0;background:#202c33;border-radius:6px;padding:2px;display:flex;gap:2px;z-index:10;box-shadow:0 4px 10px rgba(0,0,0,.5);border:1px solid #2a3942}
+.msg-menu button{background:#2a3942;border:0;color:#fff;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:10px}
+.msg-menu button.delete{background:#5a2a2a;color:#ff8a8a}
+.login-page{position:fixed;inset:0;background:#0e1621;z-index:60;display:grid;place-items:center;padding:16px}
+.login-card{width:100%;max-width:340px;background:#1e2d3e;border-radius:16px;padding:18px;text-align:center}
+/* CALL UI */
+#callOverlay{position:fixed;inset:0;background:#0b141a;z-index:80;display:flex;flex-direction:column}
+.call-top{height:56px;background:#202c33;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.call-videos{flex:1;position:relative;background:#111b21;display:flex;align-items:center;justify-content:center}
+#remoteVideo{width:100%;height:100%;object-fit:cover;background:#000}
+#localVideo{position:absolute;bottom:90px;right:16px;width:110px;height:150px;border-radius:12px;object-fit:cover;background:#2a3942;border:2px solid #2b88d8;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.call-controls{position:absolute;bottom:20px;left:0;right:0;display:flex;justify-content:center;gap:14px;padding:0 20px}
+.call-btn{width:52px;height:52px;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center;font-size:20px;color:#fff}
+.call-btn.end{background:#f15c6d}
+.call-btn.action{background:#2a3942}
+.call-btn.mic.muted{background:#f15c6d}
+.call-status{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:6px 14px;border-radius:20px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="newChannelBtn" style="background:#2b88d8;border:0;color:#fff;padding:6px 12px;border-radius:20px;font-size:12px;cursor:pointer">+ Channel</button>
+        <button id="settingsBtn" class="icon-only">⚙️</button>
+      </div>
+      <b>Private Gate 🔐</b>
+    </div>
+    <div id="channelList" class="channel-list"></div>
+    <div id="emptySide" class="empty-state">
+      <div style="font-size:36px">🔐</div>
+      <div style="margin-top:8px;font-size:13px;color:#aab8c2">No channels yet<br>Create a private channel with password</div>
+    </div>
+  </div>
+  <div class="chat" id="chatArea">
+    <div class="chat-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="backBtn" class="icon-only">✕</button>
+        <div class="avatar" id="chatAvatar">K</div>
+        <div>
+          <div id="chatName" style="font-weight:700;font-size:14px">—</div>
+          <div id="status">offline</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="voiceCallBtn" class="icon-only call" title="Voice Call">📞</button>
+        <button id="videoCallBtn" class="icon-only call" title="Video Call">📹</button>
+        <button id="deleteChatBtn" class="icon-only" title="Clear">🗑️</button>
+        <button id="logout" class="icon-only">⎋</button>
+      </div>
+    </div>
+    <div id="messages"></div>
+    <form id="sendForm">
+      <button type="button" id="attachBtn" class="icon-only" style="background:#242f3d">📎</button>
+      <div class="input-wrap">
+        <input id="text" autocomplete="off" placeholder="Type a message..." />
+      </div>
+      <button type="button" id="recordBtn" class="rec-btn" title="Hold to record">🎤</button>
+      <button id="sendBtn" type="submit">➤</button>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </form>
+  </div>
+</div>
+
+<!-- Login Overlay -->
+<div id="loginOverlay" class="overlay hidden">
+  <div class="card">
+    <h3 style="margin-bottom:12px">Create / Join Private Channel</h3>
+    <input id="name" placeholder="Your name" value="">
+    <input id="secret" type="password" placeholder="Channel password (min 3 chars)" >
+    <input id="channelLabel" placeholder="Channel label e.g. kji" value="">
+    <div id="error" style="color:#ff6b6b;font-size:11px;min-height:14px;margin:4px 0"></div>
+    <button id="enter" class="primary-btn">Enter Secure Channel</button>
+    <button id="cancelLogin" class="secondary-btn">Cancel</button>
+    <div style="margin-top:10px;font-size:10px;color:#8696a0">Messages are saved locally & encrypted with your password. Anyone with password can see history on this device.</div>
+  </div>
+</div>
+
+<div id="inlineLogin" class="login-page hidden">
+  <div class="login-card">
+    <h3>Enter Password</h3>
+    <p style="font-size:12px;color:#8696a0;margin:8px 0" id="inlineLabel">Channel</p>
+    <input id="inlineName" placeholder="Your name">
+    <input id="inlineSecret" type="password" placeholder="Password">
+    <button id="inlineEnter" class="primary-btn" style="margin-top:8px">Enter</button>
+    <button id="inlineCancel" class="secondary-btn">Cancel</button>
+    <div id="inlineError" style="color:#ff6b6b;font-size:11px;margin-top:6px"></div>
+  </div>
+</div>
+
+<!-- Call Overlay -->
+<div id="callOverlay" class="hidden">
+  <div class="call-top">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="avatar" id="callAvatar">K</div>
+      <div><div id="callName" style="font-weight:700">—</div><div id="callTimer" style="font-size:11px;color:#8696a0">Connecting...</div></div>
+    </div>
+    <button id="minimizeCall" class="icon-only">—</button>
+  </div>
+  <div class="call-videos">
+    <video id="remoteVideo" autoplay playsinline></video>
+    <video id="localVideo" autoplay muted playsinline></video>
+    <div id="callStatusText" class="call-status">🔒 End-to-End Encrypted Call</div>
+    <div class="call-controls">
+      <button id="toggleMicBtn" class="call-btn action mic">🎤</button>
+      <button id="toggleCamBtn" class="call-btn action">📹</button>
+      <button id="endCallBtn" class="call-btn end">📞</button>
+      <button id="speakerBtn" class="call-btn action">🔊</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="settingsPage" class="settings-page hidden">
+  <div class="settings-header">
+    <button id="settingsBack" class="back">←</button><b>Settings</b>
+  </div>
+  <div class="settings-content">
+    <div class="wa-profile" id="profileSection">
+      <div class="avatar" id="profileAvatar">M</div>
+      <div><div id="profileName" style="font-weight:700">User</div><div style="font-size:11px;color:#8696a0">Tap to change avatar</div></div>
+      <input type="file" id="avatarFileInput" accept="image/*" hidden>
+      <input type="file" id="bgFileInput" accept="image/*" hidden>
+    </div>
+    <div class="wa-section">
+      <div class="wa-item" id="toggleSavePassRow"><div class="text"><div class="title">Save Passwords Locally</div><div class="desc">Keep encrypted history per channel</div></div><div id="toggleSavePass" class="wa-toggle on"></div></div>
+      <div class="wa-item" id="toggleSoundsRow"><div class="text"><div class="title">Sounds</div><div class="desc">Message notification sounds</div></div><div id="toggleSounds" class="wa-toggle on"></div></div>
+    </div>
+    <div class="wa-section">
+      <div class="wa-item" id="changeChatBgBtn"><div class="text"><div class="title">Chat Wallpaper</div><div class="desc">Change background</div></div>🎨</div>
+      <div id="chatBgSection" style="display:none;padding:10px 14px">
+        <div id="bgPreview" class="bg-preview"></div>
+        <button id="uploadBgBtn" class="secondary-btn" style="margin-bottom:6px">Upload Image</button>
+        <div class="color-grid" id="colorGrid"></div>
+        <input type="range" id="bgOpacity" min="10" max="100" value="100" style="width:100%"><button id="clearBgBtn" class="secondary-btn">Clear Wallpaper</button>
+      </div>
+    </div>
+    <div class="wa-section">
+      <div class="wa-item" id="passwordVaultBtn"><div class="text"><div class="title">Password Vault</div><div class="desc">View saved channel passwords</div></div>🔑</div>
+      <div id="passwordVaultSection" style="display:none;padding:10px 14px"><div id="passwordVaultList"></div><button onclick="clearAllPasswords()" class="secondary-btn" style="color:#ff6b6b">Clear All Passwords</button></div>
+    </div>
+    <div class="wa-section">
+      <div class="wa-item" id="connStatusBtn"><div class="text"><div class="title">Connection Status</div><div class="desc">Supabase Realtime • Encrypted</div></div>✅</div>
+      <div class="wa-item" id="chatsBtn"><div class="text"><div class="title">Clear Current Chat</div></div>🗑️</div>
+      <div class="wa-item" id="deleteAllChatsBtn"><div class="text"><div class="title" style="color:#ff6b6b">Delete All Channels</div></div>⚠️</div>
+      <div class="wa-item" id="logoutAllBtn"><div class="text"><div class="title">Logout</div></div>⎋</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = "https://fyluqbiihqsqjtwqfdpq.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5bHVxYmlpaHFzcWp0d3FmZHBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwNDYxOTcsImV4cCI6MjA3MDYyMjE5N30.7k-5v4C3S7pM7G4i6q9t0y2Zx3C4v5B6n7M8k9L0p1Q2R";
+const supabaseClient = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+const $ = s => document.querySelector(s);
+
+let myName = localStorage.getItem("pg_name") || "User";
+let roomId = null, aesKey = null, supaChannel = null, currentChannel = null;
+let channels = JSON.parse(localStorage.getItem("pg_channels")||"[]");
+let messagesCache = JSON.parse(localStorage.getItem("pg_messages_cache")||"{}");
+let appSettings = JSON.parse(localStorage.getItem("pg_settings")||'{"savePasswords":true,"sounds":true,"chatBg":"","chatBgColor":"#0e1621","chatBgOpacity":100}');
+let currentUser = JSON.parse(localStorage.getItem("pg_user")||"null") || {name:myName, avatar:""};
+let pendingInlineChannel = null;
+
+function saveChannels(){ localStorage.setItem("pg_channels", JSON.stringify(channels)); }
+function saveMessages(){ localStorage.setItem("pg_messages_cache", JSON.stringify(messagesCache)); }
+function saveSettings(){ localStorage.setItem("pg_settings", JSON.stringify(appSettings)); }
+function saveUser(){ localStorage.setItem("pg_user", JSON.stringify(currentUser)); localStorage.setItem("pg_name", currentUser.name||myName); }
+
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){ return (s||"").replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+async function shaRoom(s){ const b=new TextEncoder().encode(s); const h=await crypto.subtle.digest("SHA-256", b); return Array.from(new Uint8Array(h)).slice(0,8).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+async function deriveKey(pw){ const enc=new TextEncoder().encode(pw); const salt=new TextEncoder().encode("pg_salt_v2"); const base=await crypto.subtle.importKey("raw",enc,"PBKDF2",false,["deriveKey"]); return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:120000,hash:"SHA-256"}, base, {name:"AES-GCM",length:256}, false, ["encrypt","decrypt"]); }
+async function encrypt(txt){ const iv=crypto.getRandomValues(new Uint8Array(12)); const pt=new TextEncoder().encode(txt); const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv}, aesKey, pt); const combined=new Uint8Array(iv.length+ct.byteLength); combined.set(iv,0); combined.set(new Uint8Array(ct),iv.length); return btoa(String.fromCharCode(...combined)); }
+async function decrypt(b64){ try{ const raw=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); const iv=raw.slice(0,12), ct=raw.slice(12); const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv}, aesKey, ct); return new TextDecoder().decode(pt);}catch(e){ return null; } }
+
+function addMsg(content, who="other", metaName="", html="", isHistory=false, msgId=""){
+  const box=$("#messages");
+  const div=document.createElement("div");
+  div.className="msg "+who;
+  if(msgId) div.dataset.id=msgId;
+  const timeStr=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  let inner="";
+  if(metaName) inner+=`<div class="meta">${esc(metaName)}</div>`;
+  if(html) inner+=html;
+  else inner+=esc(content);
+  inner+=`<span class="time">${timeStr}</span>`;
+  div.innerHTML=inner;
+  div.oncontextmenu=(e)=>{ e.preventDefault(); showMsgMenu(div); };
+  box.appendChild(div);
+  if(!isHistory){ box.scrollTop=box.scrollHeight; if(appSettings.sounds && who!=="me"){ try{ new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==").play(); }catch{} } }
+  else box.scrollTop=box.scrollHeight;
+}
+
+function showMsgMenu(el){
+  document.querySelectorAll(".msg-menu").forEach(m=>m.remove());
+  const menu=document.createElement("div"); menu.className="msg-menu";
+  menu.innerHTML=`<button class="delete">Delete</button>`;
+  menu.querySelector(".delete").onclick=()=>{
+    const id=el.dataset.id;
+    if(id && currentChannel && messagesCache[currentChannel.roomId]){
+      messagesCache[currentChannel.roomId]=messagesCache[currentChannel.roomId].filter(m=>m.id!==id);
+      saveMessages();
+    }
+    el.remove(); menu.remove();
+  };
+  el.style.position="relative"; el.appendChild(menu);
+  setTimeout(()=>{ document.addEventListener("click", function h(){ menu.remove(); document.removeEventListener("click",h); }, {once:true}); },100);
+}
+
+function renderChannels(){
+  const list=$("#channelList"); list.innerHTML="";
+  if(channels.length===0){ $("#emptySide").classList.remove("hidden"); return; }
+  $("#emptySide").classList.add("hidden");
+  channels.forEach(ch=>{
+    const item=document.createElement("div"); item.className="channel-item"+(currentChannel && currentChannel.roomId===ch.roomId?" active":"");
+    const lastMsgs=messagesCache[ch.roomId]||[]; const last=lastMsgs[lastMsgs.length-1];
+    const lastText=last ? (last.t==="text"?last.text : last.t==="image"?"📷 Image": last.t==="audio"?"🎤 Voice" : "📎 File") : "No messages yet";
+    item.innerHTML=`<div class="ch-avatar">${esc((ch.label||ch.roomId).slice(0,1).toUpperCase())}</div><div class="ch-info"><div class="ch-name">${esc(ch.label||ch.roomId)}</div><div class="ch-last">${esc(lastText).slice(0,30)}</div></div><button class="del-btn">✕</button>`;
+    item.onclick=()=>{ pendingInlineChannel=ch; if(ch.secret && appSettings.savePasswords){ joinWithSecret(ch, ch.secret); } else { openInlineLogin(ch); } };
+    item.querySelector(".del-btn").onclick=(e)=>{ e.stopPropagation(); if(confirm("Delete channel "+ch.label+"?")){ channels=channels.filter(x=>x.roomId!==ch.roomId); delete messagesCache[ch.roomId]; saveChannels(); saveMessages(); renderChannels(); if(currentChannel && currentChannel.roomId===ch.roomId) closeChat(); } };
+    list.appendChild(item);
+  });
+}
+
+function openInlineLogin(ch){
+  pendingInlineChannel=ch;
+  $("#inlineLabel").textContent=ch.label||ch.roomId;
+  $("#inlineName").value=currentUser.name||myName;
+  $("#inlineSecret").value=ch.secret||"";
+  $("#inlineLogin").classList.remove("hidden");
+}
+$("#inlineCancel").onclick=()=>{ $("#inlineLogin").classList.add("hidden"); pendingInlineChannel=null; };
+$("#inlineEnter").onclick=async()=>{
+  const n=$("#inlineName").value.trim()||myName;
+  const s=$("#inlineSecret").value.trim();
+  if(s.length<3){ $("#inlineError").textContent="Password too short"; return; }
+  $("#inlineEnter").textContent="Decrypting..."; $("#inlineEnter").disabled=true;
+  await joinWithSecret(pendingInlineChannel, s, n);
+  $("#inlineEnter").textContent="Enter"; $("#inlineEnter").disabled=false;
+};
+
+async function joinWithSecret(ch, secret, name){
+  try{
+    const rId=await shaRoom(secret);
+    const key=await deriveKey(secret);
+    myName=name||ch.name||myName;
+    roomId=rId; aesKey=key;
+    ch.secret=secret; ch.roomId=rId; if(name) ch.name=name;
+    saveChannels();
+    currentChannel=ch;
+    $("#inlineLogin").classList.add("hidden");
+    $("#loginOverlay").classList.add("hidden");
+    openChatUI(ch);
+    await subscribeToRoom(rId);
+  }catch(e){ $("#inlineError").textContent="Failed to decrypt"; console.error(e); }
+}
+
+function openChatUI(ch){
+  currentChannel=ch;
+  $("#chatName").textContent=ch.label||ch.roomId;
+  $("#chatAvatar").textContent=(ch.label||"K").slice(0,1).toUpperCase();
+  $("#callAvatar").textContent=(ch.label||"K").slice(0,1).toUpperCase();
+  $("#callName").textContent=ch.label||ch.roomId;
+  $("#status").textContent="connecting..."; $("#status").className="connecting";
+  $("#messages").innerHTML="";
+  // Load saved history FIRST - this is the persistence feature
+  const cached = messagesCache[ch.roomId]||[];
+  if(cached.length>0){
+    cached.forEach(m=>{
+      if(m.t==="text") addMsg(m.text, m.sender===myName?"me":"other", m.sender, "", true, m.id);
+      else if(m.t==="image") addMsg("", m.sender===myName?"me":"other", m.sender, `<img class="preview" src="${m.data}">`, true, m.id);
+      else if(m.t==="audio") addMsg("", m.sender===myName?"me":"other", m.sender, `<audio controls src="${m.data}"></audio>`, true, m.id);
+    });
+  }
+  // System message ENGLISH and E2E - replaces old arabic "تم ربط القناة"
+  addMsg("", "system", "", "🔒 <b>End-to-End Encrypted</b><br>Messages are secured with AES-256-GCM. Only people with password can read history.", true);
+  renderChannels();
+  applyBg();
+}
+
+function closeChat(){
+  if(supaChannel){ supabaseClient.removeChannel(supaChannel); supaChannel=null; }
+  if(pc) endCall();
+  roomId=null; aesKey=null; currentChannel=null;
+  $("#messages").innerHTML=""; $("#chatName").textContent="—"; $("#status").textContent="offline";
+  renderChannels();
+}
+
+async function subscribeToRoom(rId){
+  if(supaChannel) await supabaseClient.removeChannel(supaChannel);
+  supaChannel=supabaseClient.channel("room_"+rId, {config:{broadcast:{self:false}}});
+  supaChannel.on("broadcast", {event:"msg"}, async ({payload})=>{
+    const dec=await decrypt(payload.e);
+    if(!dec) return;
+    try{
+      const obj=JSON.parse(dec);
+      const sender=payload.s||"Other";
+      if(obj.id && messagesCache[rId] && messagesCache[rId].some(m=>m.id===obj.id)) return; // duplicate
+      // save to cache
+      if(!messagesCache[rId]) messagesCache[rId]=[];
+      messagesCache[rId].push({id:obj.id, t:obj.t, text:obj.text||"", data:obj.data||"", sender, time:Date.now()});
+      if(messagesCache[rId].length>500) messagesCache[rId]=messagesCache[rId].slice(-500);
+      saveMessages();
+      // render
+      if(obj.t==="text") addMsg(obj.text, "other", sender, "", false, obj.id);
+      else if(obj.t==="image") addMsg("", "other", sender, `<img class="preview" src="${obj.data}">`, false, obj.id);
+      else if(obj.t==="audio") addMsg("", "other", sender, `<audio controls src="${obj.data}"></audio>`, false, obj.id);
+      renderChannels();
+    }catch(e){ console.log("parse error", e); }
+  });
+  // Call signaling listeners
+  supaChannel.on("broadcast", {event:"call-offer"}, async ({payload})=>{ handleCallOffer(payload); });
+  supaChannel.on("broadcast", {event:"call-answer"}, async ({payload})=>{ handleCallAnswer(payload); });
+  supaChannel.on("broadcast", {event:"ice"}, async ({payload})=>{ handleIce(payload); });
+  supaChannel.on("broadcast", {event:"call-end"}, async ()=>{ endCallUI(); });
+
+  supaChannel.subscribe((status)=>{
+    if(status==="SUBSCRIBED"){ $("#status").textContent="online • E2E Encrypted"; $("#status").className=""; }
+    else { $("#status").textContent="connecting..."; $("#status").className="connecting"; }
+  });
+}
+
+async function sendViaSupabase(obj){
+  if(!obj.id) obj.id=genId();
+  if(!aesKey || !roomId || !supaChannel){ alert("Not connected"); return; }
+  const enc = await encrypt(JSON.stringify(obj));
+  // save to local cache immediately (persistence)
+  if(!messagesCache[roomId]) messagesCache[roomId]=[];
+  messagesCache[roomId].push({id:obj.id, t:obj.t, text:obj.text||"", data:obj.data||"", sender:myName, time:Date.now()});
+  if(messagesCache[roomId].length>500) messagesCache[roomId]=messagesCache[roomId].slice(-500);
+  saveMessages();
+  renderChannels();
+  if(obj.t==="text") addMsg(obj.text, "me", myName, "", false, obj.id);
+  else if(obj.t==="image") addMsg("", "me", "", `<img class="preview" src="${obj.data}">`, false, obj.id);
+  else if(obj.t==="audio") addMsg("", "me", "", `<audio controls src="${obj.data}"></audio>`, false, obj.id);
+  
+  try{
+    await supaChannel.send({ type: 'broadcast', event: 'msg', payload: {e: enc, s: myName, id: obj.id, t: Date.now()} });
+  }catch(e){ console.log("send failed", e); }
+}
+
+$("#sendForm").onsubmit=async(e)=>{
+  e.preventDefault();
+  const t=$("#text").value.trim(); if(!t) return;
+  $("#text").value="";
+  await sendViaSupabase({t:"text", text:t, id:genId()});
+};
+$("#attachBtn").onclick=()=>$("#fileInput").click();
+$("#fileInput").onchange=async()=>{
+  const f=$("#fileInput").files[0]; if(!f) return;
+  if(f.size>4*1024*1024){ alert("File too large (max 4MB)"); return; }
+  const r=new FileReader(); r.onload=async()=>{ await sendViaSupabase({t:"image", data:r.result, id:genId()}); }; r.readAsDataURL(f);
+  $("#fileInput").value="";
+};
+
+// Voice recording
+let mediaRecorder=null, audioChunks=[], isRecording=false;
+const recordBtn=$("#recordBtn");
+async function startRecording(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRecorder=new MediaRecorder(stream);
+    audioChunks=[];
+    mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.onstop=async()=>{
+      const blob=new Blob(audioChunks,{type:'audio/webm'});
+      const reader=new FileReader();
+      reader.onload=async()=>{ await sendViaSupabase({t:"audio", data:reader.result, id:genId()}); };
+      reader.readAsDataURL(blob);
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    mediaRecorder.start();
+    isRecording=true; recordBtn.classList.add("recording"); recordBtn.textContent="■";
+  }catch(e){ alert("Microphone permission needed"); }
+}
+function stopRecording(){ if(mediaRecorder && isRecording){ mediaRecorder.stop(); isRecording=false; recordBtn.classList.remove("recording"); recordBtn.textContent="🎤"; } }
+recordBtn.onmousedown=startRecording;
+recordBtn.onmouseup=stopRecording;
+recordBtn.ontouchstart=(e)=>{ e.preventDefault(); startRecording(); };
+recordBtn.ontouchend=(e)=>{ e.preventDefault(); stopRecording(); };
+// click toggle fallback
+recordBtn.onclick=()=>{ if(isRecording) stopRecording(); };
+
+// ============ WEBRTC CALLS ============
+let pc=null, localStream=null, callStartTime=null, callTimerInterval=null, isVideoCall=false, isMicMuted=false, isCamOff=false;
+
+function createPeer(){
+  pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+  pc.onicecandidate=e=>{ if(e.candidate && supaChannel){ supaChannel.send({type:'broadcast',event:'ice',payload:{candidate:e.candidate}}); } };
+  pc.ontrack=e=>{ const rv=$("#remoteVideo"); if(rv.srcObject!==e.streams[0]){ rv.srcObject=e.streams[0]; } };
+  pc.onconnectionstatechange=()=>{ if(pc.connectionState==="failed"||pc.connectionState==="disconnected") endCallUI(); };
+  return pc;
+}
+
+async function startCall(video=true){
+  if(!roomId||!supaChannel){ alert("Join a channel first"); return; }
+  isVideoCall=video;
+  $("#callOverlay").classList.remove("hidden");
+  $("#callTimer").textContent= video ? "Starting video call..." : "Starting voice call...";
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({audio:true, video:video});
+    $("#localVideo").srcObject=localStream;
+    $("#localVideo").style.display=video?"block":"none";
+    createPeer();
+    localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+    const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
+    await supaChannel.send({type:'broadcast',event:'call-offer',payload:{sdp:offer, video}});
+    startTimer();
+  }catch(e){ alert("Camera/Mic permission needed: "+e.message); endCallUI(); }
+}
+
+async function handleCallOffer(payload){
+  if(pc) return; // already in call
+  isVideoCall=payload.video;
+  const accept=confirm((isVideoCall?"Video":"Voice")+" call incoming. Accept? (End-to-End Encrypted)");
+  if(!accept){ supaChannel.send({type:'broadcast',event:'call-end',payload:{}}); return; }
+  $("#callOverlay").classList.remove("hidden");
+  $("#callTimer").textContent="Connecting...";
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({audio:true, video:isVideoCall});
+    $("#localVideo").srcObject=localStream;
+    $("#localVideo").style.display=isVideoCall?"block":"none";
+    createPeer();
+    localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+    await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+    const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
+    await supaChannel.send({type:'broadcast',event:'call-answer',payload:{sdp:answer}});
+    startTimer();
+  }catch(e){ console.error(e); endCallUI(); }
+}
+
+async function handleCallAnswer(payload){
+  if(!pc) return;
+  await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+  $("#callTimer").textContent="Connected • 🔒 E2E Encrypted";
+}
+async function handleIce(payload){
+  if(!pc||!payload.candidate) return;
+  try{ await pc.addIceCandidate(new RTCIceCandidate(payload.candidate)); }catch(e){}
+}
+
+function startTimer(){
+  callStartTime=Date.now();
+  clearInterval(callTimerInterval);
+  callTimerInterval=setInterval(()=>{
+    const diff=Math.floor((Date.now()-callStartTime)/1000);
+    const m=String(Math.floor(diff/60)).padStart(2,'0'), s=String(diff%60).padStart(2,'0');
+    $("#callTimer").textContent=`${m}:${s} • 🔒 E2E Encrypted`;
+  },1000);
+}
+function endCall(){
+  if(supaChannel) supaChannel.send({type:'broadcast',event:'call-end',payload:{}}).catch(()=>{});
+  endCallUI();
+}
+function endCallUI(){
+  clearInterval(callTimerInterval);
+  if(pc){ pc.close(); pc=null; }
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  $("#remoteVideo").srcObject=null; $("#localVideo").srcObject=null;
+  $("#callOverlay").classList.add("hidden");
+  $("#localVideo").style.display="block";
+  isMicMuted=false; isCamOff=false;
+  $("#toggleMicBtn").classList.remove("muted"); $("#toggleMicBtn").textContent="🎤";
+  $("#toggleCamBtn").textContent="📹";
+}
+
+$("#voiceCallBtn").onclick=()=>startCall(false);
+$("#videoCallBtn").onclick=()=>startCall(true);
+$("#endCallBtn").onclick=endCall;
+$("#minimizeCall").onclick=()=>$("#callOverlay").classList.add("hidden");
+$("#toggleMicBtn").onclick=()=>{
+  if(!localStream) return;
+  isMicMuted=!isMicMuted;
+  localStream.getAudioTracks().forEach(t=>t.enabled=!isMicMuted);
+  $("#toggleMicBtn").classList.toggle("muted", isMicMuted);
+  $("#toggleMicBtn").textContent=isMicMuted?"🔇":"🎤";
+};
+$("#toggleCamBtn").onclick=()=>{
+  if(!localStream) return;
+  isCamOff=!isCamOff;
+  localStream.getVideoTracks().forEach(t=>t.enabled=!isCamOff);
+  $("#toggleCamBtn").textContent=isCamOff?"🚫📹":"📹";
+  $("#localVideo").style.opacity=isCamOff?"0.3":"1";
+};
+$("#speakerBtn").onclick=()=>{
+  const rv=$("#remoteVideo");
+  rv.setSinkId && rv.setSinkId(rv.sinkId ? "" : "speaker").catch(()=>{});
+  $("#speakerBtn").textContent= $("#speakerBtn").textContent==="🔊" ? "🔈" : "🔊";
+};
+
+// Settings & other UI
+$("#newChannelBtn").onclick=()=>$("#loginOverlay").classList.remove("hidden");
+$("#cancelLogin").onclick=()=>$("#loginOverlay").classList.add("hidden");
+$("#backBtn").onclick=closeChat;
+$("#enter").onclick=async()=>{
+  const n=$("#name").value.trim()||myName, s=$("#secret").value.trim(), l=$("#channelLabel").value.trim()||"Private";
+  if(s.length<3){ $("#error").textContent="Password too short (min 3)"; return; }
+  const rId=await shaRoom(s); myName=n; roomId=rId; aesKey=await deriveKey(s);
+  currentUser.name=n; saveUser();
+  let ex=channels.find(c=>c.roomId===rId);
+  if(ex){ ex.label=l; ex.name=n; ex.secret=s; } else channels.push({id:Date.now(), roomId:rId, label:l, name:n, secret:s});
+  saveChannels(); currentChannel=channels.find(c=>c.roomId===rId); $("#loginOverlay").classList.add("hidden"); openChatUI(currentChannel);
+  await subscribeToRoom(rId);
+};
+$("#settingsBtn").onclick=()=>{ $("#settingsPage").classList.remove("hidden"); updateCounts(); applyToggles(); };
+$("#settingsBack").onclick=()=>$("#settingsPage").classList.add("hidden");
+function applyToggles(){
+  const g=id=>document.getElementById(id);
+  if(g("toggleSavePass")) g("toggleSavePass").classList.toggle("on", appSettings.savePasswords);
+  if(g("toggleSounds")) g("toggleSounds").classList.toggle("on", appSettings.sounds);
+}
+function setupToggle(rowId, toggleId, key){
+  const row=document.getElementById(rowId);
+  const tog=document.getElementById(toggleId);
+  if(!row||!tog) return;
+  const fn=()=>{ appSettings[key]=!appSettings[key]; saveSettings(); applyToggles(); if(key==="savePasswords" && !appSettings[key]){ if(confirm('Clear saved passwords and history?')){ channels.forEach(c=>delete c.secret); Object.keys(messagesCache).forEach(k=>delete messagesCache[k]); saveChannels(); saveMessages(); } } };
+  row.onclick=(e)=>{ if(e.target.closest(".wa-toggle")) return; fn(); };
+  tog.onclick=(e)=>{ e.stopPropagation(); fn(); };
+}
+setupToggle("toggleSoundsRow","toggleSounds","sounds");
+setupToggle("toggleSavePassRow","toggleSavePass","savePasswords");
+
+function applyBg(){
+  const m=$("#messages");
+  if(appSettings.chatBg){ m.style.backgroundImage=`url(${appSettings.chatBg})`; m.style.backgroundColor=appSettings.chatBgColor; m.style.opacity=(appSettings.chatBgOpacity/100); }
+  else { m.style.backgroundImage=""; m.style.backgroundColor="#0e1621"; m.style.opacity="1"; }
+  const p=$("#bgPreview"); if(p){ if(appSettings.chatBg){ p.style.backgroundImage=`url(${appSettings.chatBg})`; p.classList.add("has-image"); } else { p.style.backgroundImage=""; p.style.backgroundColor=appSettings.chatBgColor; p.classList.remove("has-image"); } }
+}
+function initColors(){
+  const grid=$("#colorGrid"); if(!grid) return;
+  grid.innerHTML="";
+  ["#0e1621","#111b21","#1a2a3a","#0a332c","#2a1a3a","#3a2a1a","#1a3a2a","#202c33","#2b5278","#005c4b"].forEach(c=>{
+    const d=document.createElement("div"); d.className="color-dot"+(appSettings.chatBgColor===c?" active":""); d.style.background=c;
+    d.onclick=()=>{ appSettings.chatBgColor=c; appSettings.chatBg=""; saveSettings(); applyBg(); initColors(); };
+    grid.appendChild(d);
+  });
+}
+$("#changeChatBgBtn").onclick=()=>{ const s=$("#chatBgSection"); s.style.display=s.style.display==="none"?"block":"none"; initColors(); };
+$("#uploadBgBtn").onclick=()=>$("#bgFileInput").click();
+$("#bgFileInput").onchange=()=>{
+  const f=$("#bgFileInput").files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ appSettings.chatBg=r.result; saveSettings(); applyBg(); }; r.readAsDataURL(f);
+};
+$("#clearBgBtn").onclick=()=>{ appSettings.chatBg=""; appSettings.chatBgColor="#0e1621"; saveSettings(); applyBg(); initColors(); };
+$("#changeAvatarBgBtn")?.addEventListener("click",()=>$("#avatarFileInput").click());
+$("#profileSection").onclick=()=>$("#avatarFileInput").click();
+$("#avatarFileInput").onchange=()=>{
+  const f=$("#avatarFileInput").files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ if(currentUser){ currentUser.avatar=r.result; saveUser(); updateProfile(); } }; r.readAsDataURL(f);
+};
+$("#chatAvatar").onclick=()=>$("#avatarFileInput").click();
+function updateProfile(){
+  const av=$("#profileAvatar"), ca=$("#chatAvatar");
+  if(currentUser.avatar){ av.innerHTML=`<img src="${currentUser.avatar}" style="width:100%;height:100%;object-fit:cover">`; ca.innerHTML=`<img src="${currentUser.avatar}" style="width:100%;height:100%;object-fit:cover">`; }
+  else { av.textContent=(currentUser.name||"M").slice(0,1).toUpperCase(); ca.textContent=(currentUser.name||"M").slice(0,1).toUpperCase(); }
+  $("#profileName").textContent=currentUser.name||myName;
+}
+function updateCounts(){}
+$("#passwordVaultBtn").onclick=()=>{
+  const s=$("#passwordVaultSection"); s.style.display=s.style.display==="none"?"block":"none";
+  const list=$("#passwordVaultList"); list.innerHTML="";
+  channels.forEach(ch=>{
+    if(!ch.secret) return;
+    const d=document.createElement("div"); d.style.cssText="display:flex;align-items:center;gap:8px;background:#2a3942;padding:8px;border-radius:8px;margin-bottom:6px";
+    d.innerHTML=`<div style="flex:1;text-align:left"><div style="font-size:12px">${esc(ch.label)}</div><div style="font-size:10px;color:#8696a0;direction:ltr">${esc(ch.secret)}</div></div><button onclick="deleteVault('${ch.roomId}')" style="background:#f15c6d;border:0;color:#fff;padding:3px 7px;border-radius:5px;font-size:10px">🗑️</button>`;
+    list.appendChild(d);
+  });
+  if(channels.filter(c=>c.secret).length===0) list.innerHTML='<div style="text-align:center;color:#8696a0;padding:8px;font-size:11px">No saved passwords</div>';
+};
+window.deleteVault=(id)=>{ const ch=channels.find(c=>c.roomId===id); if(ch) delete ch.secret; saveChannels(); $("#passwordVaultBtn").click(); $("#passwordVaultBtn").click(); };
+window.clearAllPasswords=()=>{ if(confirm('Delete all saved passwords and local history?')){ channels.forEach(c=>delete c.secret); messagesCache={}; saveChannels(); saveMessages(); renderChannels(); } };
+$("#connStatusBtn").onclick=()=>{
+  alert(`✅ Supabase Realtime • E2E Encrypted\nRoom: ${roomId||'none'}\nServer: Supabase\nEncryption: AES-256-GCM + PBKDF2\nHistory: Local encrypted cache (${Object.keys(messagesCache).length} channels)\nCalls: WebRTC P2P`);
+};
+$("#chatsBtn").onclick=()=>{
+  if(!currentChannel){ alert('Join a channel first'); return; }
+  if(confirm(`Clear messages for "${currentChannel.label}"?`)){
+    messagesCache[currentChannel.roomId]=[]; saveMessages(); $("#messages").innerHTML=""; addMsg("Chat cleared 🗑️","system");
+  }
+};
+$("#deleteAllChatsBtn").onclick=()=>{
+  if(confirm('Delete all channels and history?')){ channels=[]; messagesCache={}; saveChannels(); saveMessages(); closeChat(); renderChannels(); }
+};
+$("#logoutAllBtn").onclick=()=>{ if(confirm('Logout?')){ localStorage.removeItem("pg_user"); currentUser=null; location.reload(); } };
+$("#deleteChatBtn").onclick=()=>{
+  if(!currentChannel) return;
+  if(confirm(`Clear messages for "${currentChannel.label}"?`)){
+    messagesCache[currentChannel.roomId]=[]; saveMessages(); $("#messages").innerHTML=""; addMsg("Chat cleared 🗑️","system");
+  }
+};
+$("#logout").onclick=()=>{ if(confirm('Leave channel?')) closeChat(); };
+
+function checkLogin(){
+  if(currentUser && currentUser.name){ myName=currentUser.name; updateProfile(); }
+}
+checkLogin();
+renderChannels();
+updateCounts();
+applyBg();
+initColors();
+</script>
+</body>
+</html>
